@@ -1,0 +1,55 @@
+services:
+  api:
+    build: .
+    container_name: mlops_api
+    ports:
+      - "8000:8000"
+    environment:
+      - JWT_SECRET_KEY=dev-secret-key-change-in-prod
+      - JWT_ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=60
+      - API_USERNAME=admin
+      - API_PASSWORD=admin123
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+      - AWS_DEFAULT_REGION=us-east-1
+      - S3_BUCKET_NAME=mlops-bucket
+      - S3_ENDPOINT_URL=http://minio:9000
+      - DRIFT_THRESHOLD_PSI=0.25
+      - DRIFT_THRESHOLD_KS=0.05
+      - PERFORMANCE_THRESHOLD_F1=0.80
+      - OPTUNA_TRIALS=5
+      - LOCAL_STORAGE_DIR=/app/data_store
+    volumes:
+      - api_data:/app/data_store
+    depends_on:
+      - createbuckets
+
+  minio:
+    image: minio/minio:latest
+    container_name: mlops_minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+
+  createbuckets:
+    image: minio/mc:latest
+    container_name: mlops_minio_provisioner
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until (/usr/bin/mc alias set localminio http://minio:9000 minioadmin minioadmin) do echo 'Waiting for MinIO...' && sleep 1; done;
+      /usr/bin/mc mb localminio/mlops-bucket || true;
+      exit 0;
+      "
+
+volumes:
+  api_data:
+  minio_data:

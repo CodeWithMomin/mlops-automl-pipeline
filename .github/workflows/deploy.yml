@@ -1,0 +1,86 @@
+name: MLOps CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    name: Lint, Test & Validate
+    runs-ok: ubuntu-latest
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
+
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run Tests
+      env:
+        # Mock environment variables to run tests locally
+        JWT_SECRET_KEY: testsecret
+        LOCAL_STORAGE_DIR: ./test_store
+      run: |
+        python -m pytest tests/
+
+  build-and-deploy:
+    name: Build Docker Image & Deploy to AWS
+    needs: test
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    # The following steps show how to build and push to AWS ECR / Deploy to EC2.
+    # Note: These require configuring GitHub secrets: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_EC2_HOST, AWS_SSH_KEY
+    
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Build and Push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: false  # Change to true when configuring ECR repository
+        tags: |
+          ${{ steps.login-ecr.outputs.registry }}/mlops-api:latest
+          ${{ steps.login-ecr.outputs.registry }}/mlops-api:${{ github.sha }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    # Example Deployment step to SSH into AWS EC2 and pull latest images
+    # - name: Deploy to AWS EC2
+    #   uses: appleboy/ssh-action@v1.0.3
+    #   with:
+    #     host: ${{ secrets.AWS_EC2_HOST }}
+    #     username: ec2-user
+    #     key: ${{ secrets.AWS_SSH_KEY }}
+    #     script: |
+    #       cd /home/ec2-user/mlops-pipeline
+    #       docker compose pull
+    #       docker compose up -d --force-recreate

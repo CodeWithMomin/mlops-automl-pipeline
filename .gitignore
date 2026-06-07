@@ -1,0 +1,29 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# Python test caches
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local databases & logs (Inference logs / ML dumps)
+data_store/
+test_store/
+*.log
+*.pkl
+*.csv
+
+# Sensitive Environment Configurations
+.env
+
+# Custom Zipped archive
+mlops_pipeline.zip
